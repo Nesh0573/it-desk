@@ -15,8 +15,12 @@
 body{margin:0;font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx)}
 header{background:var(--g);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
 header h1{font-size:18px;margin:0;flex:1}
-#logo{height:36px;width:auto;max-width:170px;object-fit:contain;background:#fff;border-radius:8px;padding:2px 6px}
-@media(max-width:430px){header h1{display:none}#logo{margin-right:auto;height:32px}}
+#logo{height:40px;width:auto;max-width:190px;object-fit:contain;background:#fff;border-radius:8px;padding:2px 6px}
+@media(max-width:430px){header h1{display:none}#logo{margin-right:auto;height:34px}}
+#wm{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+#wm div{position:absolute;inset:-60%;background:url(watermark.png) repeat;background-size:460px auto;transform:rotate(-16deg);opacity:.07}
+@media(prefers-color-scheme:dark){#wm div{opacity:.12}}
+main,#who{position:relative;z-index:1}
 .pill{font-size:12px;padding:3px 10px;border-radius:99px}
 .pill.on{background:#a5d6a7;color:#0b3d0b}.pill.off{background:#ffcc80;color:#5a3300}
 button{font:inherit;background:var(--g2);color:#fff;border:0;border-radius:8px;padding:9px 14px;cursor:pointer}
@@ -27,7 +31,7 @@ main{max-width:760px;margin:0 auto;padding:12px}
 #who{font-size:12px;color:var(--mut);padding:6px 14px;text-align:center}
 #signOut{color:inherit;margin-left:10px}
 #banner label{color:#4a3b00}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:10px}
+.card{background:var(--card);background:color-mix(in srgb,var(--card) 88%,transparent);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:10px}
 label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
 input,select,textarea{font:inherit;width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx)}
 textarea{min-height:100px}
@@ -52,6 +56,7 @@ dialog::backdrop{background:#0008}
 </style>
 </head>
 <body>
+<div id="wm" aria-hidden="true"><div></div></div>
 <header>
   <img id="logo" src="logo.png" alt="Gamewatchers Safaris &amp; Porini Camps" onerror="this.remove()">
   <h1>IT Desk</h1>
@@ -171,7 +176,7 @@ function render() {
   fillSelect('#fCamp', S.config.camps, 'Select camp');
   fillSelect('#fCat', S.config.categories);
   fillSelect('#fPri', S.config.priorities);
-  if (!$('#fPri').value && S.config.priorities.includes('Medium')) $('#fPri').value = 'Medium';
+  if (!window._priSet && S.config.priorities.includes('Medium')) { $('#fPri').value = 'Medium'; window._priSet = true; }
   fillSelect('#fSt', S.config.statuses.concat(['Pending sync']), 'All statuses');
   const needAuth = online && !credValid() && (S.queue.length > 0 || !(p && p.verified));
   $('#banner').hidden = !needAuth;

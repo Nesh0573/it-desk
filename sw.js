@@ -1,7 +1,7 @@
 // Serves the app instantly from cache (works with zero signal), refreshes it quietly when online.
 // Bump CACHE when you upload a new version of index.html.
-const CACHE = 'itdesk-v4';
-const SHELL = ['./', 'index.html', 'manifest.json', 'logo.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
+const CACHE = 'itdesk-v5';
+const SHELL = ['./', 'index.html', 'manifest.json', 'logo.png', 'watermark.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
