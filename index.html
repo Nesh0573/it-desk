@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b5e20">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>IT Desk</title>
+<style>
+:root{--g:#1b5e20;--g2:#2e7d32;--bg:#f4f6f4;--card:#fff;--tx:#1d2b1d;--mut:#667a67;--bd:#dde3dd}
+@media(prefers-color-scheme:dark){:root{--bg:#121712;--card:#1b231b;--tx:#e6efe6;--mut:#9ab59a;--bd:#2d392d}}
+*{box-sizing:border-box}
+body{margin:0;font:16px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--g);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5}
+header h1{font-size:18px;margin:0;flex:1}
+#logo{height:36px;width:auto;max-width:170px;object-fit:contain;background:#fff;border-radius:8px;padding:2px 6px}
+@media(max-width:430px){header h1{display:none}#logo{margin-right:auto;height:32px}}
+.pill{font-size:12px;padding:3px 10px;border-radius:99px}
+.pill.on{background:#a5d6a7;color:#0b3d0b}.pill.off{background:#ffcc80;color:#5a3300}
+button{font:inherit;background:var(--g2);color:#fff;border:0;border-radius:8px;padding:9px 14px;cursor:pointer}
+button.sec{background:transparent;color:var(--g2);border:1px solid var(--g2)}
+button.danger{background:#b3261e}
+header button{background:#ffffff26;padding:6px 12px}
+main{max-width:760px;margin:0 auto;padding:12px}
+#who{font-size:12px;color:var(--mut);padding:6px 14px;text-align:center}
+#signOut{color:inherit;margin-left:10px}
+#banner label{color:#4a3b00}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:10px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input,select,textarea{font:inherit;width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx)}
+textarea{min-height:100px}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{flex:1;background:transparent;color:var(--g2);border:1px solid var(--g2)}
+.tabs button.act{background:var(--g2);color:#fff}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.muted{color:var(--mut);font-size:13px}
+.tk{cursor:pointer}
+.badge{font-size:12px;padding:2px 9px;border-radius:99px;background:#e0e0e0;color:#222;white-space:nowrap}
+.badge.open{background:#f4c7c3}.badge.in-progress{background:#fce8b2}.badge.waiting-on-camp{background:#d9eaf7}
+.badge.resolved{background:#b7e1cd}.badge.closed{background:#e0e0e0}.badge.pending-sync{background:#ffe0b2}.badge.sync-error{background:#ef9a9a}
+#banner{background:#fff8e1;color:#4a3b00;border:1px solid #ffe082;border-radius:12px;padding:12px;margin-bottom:10px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .25s;max-width:90%;z-index:20}
+#toast.show{opacity:1}
+dialog{border:0;border-radius:14px;padding:16px;max-width:560px;width:calc(100% - 24px);background:var(--card);color:var(--tx)}
+dialog::backdrop{background:#0008}
+.cm{background:var(--bg);border-radius:8px;padding:8px;margin:4px 0;font-size:14px;white-space:pre-wrap}
+.err{color:#b3261e;font-size:14px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <img id="logo" src="logo.png" alt="Gamewatchers Safaris &amp; Porini Camps" onerror="this.remove()">
+  <h1>IT Desk</h1>
+  <span id="net" class="pill"></span>
+  <button id="syncBtn">Sync (<span id="pend">0</span>)</button>
+</header>
+<div id="who"><span id="whoTxt"></span><a href="#" id="signOut" hidden>Sign out</a></div>
+<main>
+  <div id="banner" hidden>
+    <div id="bannerMsg"></div>
+    <div id="siStep1">
+      <label for="siName">Your name</label><input id="siName" autocomplete="name">
+      <label for="siEmail">Your work email</label><input id="siEmail" type="email" placeholder="name@porini.com" autocomplete="email">
+      <button id="siSend" style="margin-top:10px">Email me a sign-in code</button>
+    </div>
+    <div id="siStep2" hidden>
+      <label for="siCode">Enter the 6-digit code sent to <b id="siTo"></b></label>
+      <input id="siCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456">
+      <div style="margin-top:10px"><button id="siVerify">Sign in</button> <button id="siBack" class="sec">Back</button></div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button id="tabNew" class="act">New ticket</button>
+    <button id="tabList">My tickets</button>
+  </div>
+
+  <section id="viewNew">
+    <form id="frm" class="card" autocomplete="off">
+      <div class="grid">
+        <div><label for="fName">Your name</label><input id="fName" name="name" required></div>
+        <div><label for="fEmail">Your email</label><input id="fEmail" name="email" type="email" required placeholder="name@porini.com"></div>
+      </div>
+      <div class="grid">
+        <div><label for="fCamp">Camp / location</label><select id="fCamp" name="camp" required></select></div>
+        <div><label for="fCat">Category</label><select id="fCat" name="category" required></select></div>
+      </div>
+      <div class="grid">
+        <div><label for="fPri">Priority</label><select id="fPri" name="priority" required></select></div>
+        <div><label for="fAsset">Laptop asset tag / serial (optional)</label><input id="fAsset" name="asset"></div>
+      </div>
+      <label for="fSubj">Subject</label><input id="fSubj" name="subject" required maxlength="150">
+      <label for="fDesc">What is the problem?</label><textarea id="fDesc" name="desc" required maxlength="3000"></textarea>
+      <p class="muted">No signal? Submit anyway. It is saved on this device and sent automatically when you are back online.</p>
+      <button type="submit" style="width:100%">Submit ticket</button>
+    </form>
+  </section>
+
+  <section id="viewList" hidden>
+    <div class="grid" style="margin-bottom:10px">
+      <input id="q" placeholder="Search tickets">
+      <select id="fSt"></select>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<dialog id="dlg"><div id="dlgBody"></div><div style="margin-top:12px"><button class="sec" id="dlgClose">Close</button></div></dialog>
+<div id="toast"></div>
+
+<script>
+/* ======== EDIT API_URL AFTER DEPLOYING THE BACKEND ======== */
+const CFG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbwhZRZDHBUE21tdQW8fDwuMq0LuTsQYU2xHFkGMa0fAFfsvT3-6Bt3tSHzMogJ1N-C4uw/exec',
+  DOMAINS: ['gamewatchers.co.ke', 'gamewatchers.com', 'porini.com']
+};
+/* ================================================================== */
+
+const DEFAULT_CONFIG = {
+  camps: ['NTC', 'PAC', 'RRC', 'PRC', 'POSC', 'PMC', 'PCC', 'PGC', 'PLC', 'Head Office'],
+  categories: ['Laptop / Desktop', 'Internet / WiFi', 'Email / Google Workspace', 'Printer', 'Phone / PBX', 'Software / ERP', 'Other'],
+  priorities: ['Low', 'Medium', 'High', 'Urgent'],
+  statuses: ['Open', 'In Progress', 'Waiting on Camp', 'Resolved', 'Closed'],
+  itStaff: []
+};
+
+const $ = s => document.querySelector(s);
+const ls = {
+  get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast('Device storage is full.'); } }
+};
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const slug = s => String(s || '').toLowerCase().replace(/[^a-z]+/g, '-');
+const fmt = x => x ? new Date(x).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+let S = {
+  profile: ls.get('profile', null),
+  cred: ls.get('cred', null),
+  config: Object.assign({}, DEFAULT_CONFIG, ls.get('config', {})),
+  tickets: ls.get('tickets', []),
+  queue: ls.get('queue', [])
+};
+const save = () => ['profile', 'cred', 'config', 'tickets', 'queue'].forEach(k => ls.set(k, S[k]));
+
+let toastTimer;
+function toast(m) {
+  const t = $('#toast'); t.textContent = m; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+function fillSelect(sel, arr, ph) {
+  const el = $(sel), v = el.value;
+  el.innerHTML = (ph ? '<option value="">' + esc(ph) + '</option>' : '') + arr.map(x => '<option>' + esc(x) + '</option>').join('');
+  if (arr.includes(v)) el.value = v;
+}
+
+const credValid = () => S.cred && S.cred.exp * 1000 > Date.now() + 60000;
+
+function render() {
+  const p = S.profile, online = navigator.onLine;
+  $('#net').textContent = online ? 'Online' : 'Offline';
+  $('#net').className = 'pill ' + (online ? 'on' : 'off');
+  $('#pend').textContent = S.queue.length;
+  $('#whoTxt').textContent = p && p.email ? (p.name || '') + ' · ' + p.email + (p.isIT ? ' · IT' : '') : 'Not signed in yet';
+  $('#signOut').hidden = !(p && p.verified);
+  $('#tabList').textContent = p && p.isIT ? 'All tickets' : 'My tickets';
+  fillSelect('#fCamp', S.config.camps, 'Select camp');
+  fillSelect('#fCat', S.config.categories);
+  fillSelect('#fPri', S.config.priorities);
+  if (!$('#fPri').value && S.config.priorities.includes('Medium')) $('#fPri').value = 'Medium';
+  fillSelect('#fSt', S.config.statuses.concat(['Pending sync']), 'All statuses');
+  const needAuth = online && !credValid() && (S.queue.length > 0 || !(p && p.verified));
+  $('#banner').hidden = !needAuth;
+  if (needAuth) {
+    $('#bannerMsg').textContent = S.queue.length
+      ? 'You are back online. Sign in with an emailed code to send your saved tickets.'
+      : 'Sign in once (while online) with a code sent to your work email.';
+    if (!$('#siEmail').value && p && p.email) $('#siEmail').value = p.email;
+    if (!$('#siName').value && p && p.name) $('#siName').value = p.name;
+  }
+  renderList();
+}
+
+function prefill() {
+  const p = S.profile || {};
+  $('#fName').value = p.name || '';
+  $('#fEmail').value = p.email || '';
+  $('#fEmail').readOnly = !!p.verified;
+}
+
+function allRows() {
+  const pend = S.queue.filter(o => o.type === 'create').map(o => ({
+    pending: true, no: 'Pending', opId: o.id, created: o.at, camp: o.p.camp, category: o.p.category,
+    priority: o.p.priority, subject: o.p.subject, description: o.p.description, reporterEmail: o.p.reporterEmail,
+    status: o.error ? 'Sync error' : 'Pending sync', error: o.error, comments: ''
+  }));
+  return pend.concat(S.tickets);
+}
+
+function renderList() {
+  const q = $('#q').value.toLowerCase(), st = $('#fSt').value;
+  const rows = allRows().filter(r => (!st || r.status === st) &&
+    (!q || (r.no + ' ' + r.subject + ' ' + r.camp + ' ' + r.description + ' ' + (r.reporterEmail || '')).toLowerCase().includes(q)));
+  rows.sort((a, b) => new Date(b.created) - new Date(a.created));
+  $('#list').innerHTML = rows.length ? rows.map(r =>
+    '<div class="card tk" data-k="' + esc(r.pending ? r.opId : r.no) + '"><div class="row"><b>' + esc(r.no) +
+    '</b><span class="badge ' + slug(r.status) + '">' + esc(r.status) + '</span></div><div>' + esc(r.subject) +
+    '</div><div class="muted">' + esc(r.camp) + ' · ' + esc(r.priority) + ' · ' + fmt(r.created) + '</div></div>'
+  ).join('') : '<p class="muted" style="text-align:center">No tickets to show.</p>';
+}
+
+/* ---------- Queue ---------- */
+function queueOp(type, p) {
+  const id = uid();
+  if (type === 'create') p.clientId = id;
+  S.queue.push({ id: id, type: type, at: new Date().toISOString(), p: p });
+  save(); render();
+  if (navigator.onLine) sync();
+}
+
+$('#frm').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const v = Object.fromEntries(new FormData(ev.target));
+  const email = v.email.trim().toLowerCase();
+  if (!CFG.DOMAINS.includes(email.split('@')[1])) {
+    toast('Use your company email (' + CFG.DOMAINS.join(', ') + ').'); return;
+  }
+  S.profile = Object.assign({}, S.profile || {}, { email: email, name: v.name.trim() });
+  queueOp('create', {
+    camp: v.camp, category: v.category, priority: v.priority, assetTag: v.asset.trim(),
+    subject: v.subject.trim(), description: v.desc.trim(), reporterName: S.profile.name, reporterEmail: email
+  });
+  ev.target.reset(); prefill(); $('#fPri').value = 'Medium';
+  toast(navigator.onLine ? 'Ticket submitted. Syncing...' : 'Saved on this device. It will send when you are online.');
+  showTab('list');
+});
+
+/* ---------- Ticket detail ---------- */
+function openTicket(key) {
+  const t = allRows().find(r => (r.pending ? r.opId : r.no) === key);
+  if (!t) return;
+  const isIT = S.profile && S.profile.isIT;
+  let h = '<h3 style="margin-top:0">' + esc(t.no) + ' · ' + esc(t.subject) + '</h3>' +
+    '<p class="muted">' + esc(t.camp) + ' · ' + esc(t.category) + ' · ' + esc(t.priority) + ' · ' + fmt(t.created) +
+    (t.reporterName ? '<br>Reported by ' + esc(t.reporterName) + ' (' + esc(t.reporterEmail) + ')' : '') + '</p>' +
+    '<p>' + esc(t.description).replace(/\n/g, '<br>') + '</p>' +
+    '<p><span class="badge ' + slug(t.status) + '">' + esc(t.status) + '</span>' +
+    (t.assigned ? ' <span class="muted">Assigned to ' + esc(t.assigned) + '</span>' : '') + '</p>';
+  if (t.pending) {
+    if (t.error) h += '<p class="err">' + esc(t.error) + '</p><button id="dRetry" class="sec">Retry</button> ';
+    h += '<button id="dDiscard" class="danger">Discard</button>';
+  } else {
+    const cms = String(t.comments || '').split('\n').filter(Boolean);
+    h += '<h4>Comments</h4>' + (cms.length ? cms.map(c => '<div class="cm">' + esc(c) + '</div>').join('') : '<p class="muted">None yet.</p>') +
+      '<label for="dCm">Add a comment</label><textarea id="dCm" style="min-height:70px"></textarea>' +
+      '<button id="dAdd" style="margin-top:8px">Add comment</button>';
+    if (isIT) {
+      h += '<hr><h4>IT update</h4><div class="grid"><div><label for="dSt">Status</label><select id="dSt">' +
+        S.config.statuses.map(s => '<option' + (s === t.status ? ' selected' : '') + '>' + esc(s) + '</option>').join('') +
+        '</select></div><div><label for="dAs">Assigned to</label><select id="dAs"><option value="">Unassigned</option>' +
+        S.config.itStaff.map(s => '<option' + (s === t.assigned ? ' selected' : '') + '>' + esc(s) + '</option>').join('') +
+        '</select></div></div><button id="dSave" style="margin-top:10px">Save update</button>';
+    }
+  }
+  $('#dlgBody').innerHTML = h;
+  const on = (id, fn) => { const b = $(id); if (b) b.addEventListener('click', fn); };
+  on('#dDiscard', () => { S.queue = S.queue.filter(o => o.id !== t.opId); save(); render(); $('#dlg').close(); });
+  on('#dRetry', () => { S.queue.forEach(o => { if (o.id === t.opId) delete o.error; }); save(); render(); $('#dlg').close(); sync(true); });
+  on('#dAdd', () => {
+    const text = $('#dCm').value.trim(); if (!text) return;
+    const tk = S.tickets.find(x => x.no === t.no);
+    if (tk) tk.comments = (tk.comments ? tk.comments + '\n' : '') + '[pending] ' + ((S.profile && S.profile.name) || 'You') + ': ' + text;
+    queueOp('comment', { ticketNo: t.no, text: text });
+    $('#dlg').close(); toast('Comment saved.');
+  });
+  on('#dSave', () => {
+    const tk = S.tickets.find(x => x.no === t.no);
+    const status = $('#dSt').value, assigned = $('#dAs').value;
+    if (tk) { tk.status = status; tk.assigned = assigned; }
+    queueOp('update', { ticketNo: t.no, status: status, assigned: assigned });
+    $('#dlg').close(); toast('Update saved.');
+  });
+  $('#dlg').showModal();
+}
+$('#list').addEventListener('click', e => { const c = e.target.closest('.tk'); if (c) openTicket(c.dataset.k); });
+$('#dlgClose').addEventListener('click', () => $('#dlg').close());
+
+/* ---------- Sign-in by emailed code (only needed to sync) ---------- */
+async function api(body) {
+  const r = await fetch(CFG.API_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body)
+  });
+  return r.json();
+}
+function apiReady() {
+  if (CFG.API_URL.indexOf('PASTE') === 0) { toast('App not configured: set API_URL in index.html'); return false; }
+  return true;
+}
+
+$('#siSend').addEventListener('click', async () => {
+  const email = $('#siEmail').value.trim().toLowerCase(), name = $('#siName').value.trim();
+  if (!name) { toast('Please enter your name.'); return; }
+  if (!CFG.DOMAINS.includes(email.split('@')[1])) { toast('Use your company email (' + CFG.DOMAINS.join(', ') + ').'); return; }
+  if (!navigator.onLine) { toast('You are offline. Try again when you have signal.'); return; }
+  if (!apiReady()) return;
+  $('#siSend').disabled = true;
+  try {
+    const d = await api({ action: 'requestCode', email: email, name: name });
+    if (!d.ok) { toast(d.error); return; }
+    $('#siTo').textContent = email;
+    $('#siStep1').hidden = true; $('#siStep2').hidden = false; $('#siCode').focus();
+    toast('Code sent. Check your inbox (and spam folder).');
+  } catch (e) { toast('Could not reach the server. Try again.'); }
+  finally { $('#siSend').disabled = false; }
+});
+
+$('#siBack').addEventListener('click', () => { $('#siStep2').hidden = true; $('#siStep1').hidden = false; });
+
+$('#siVerify').addEventListener('click', async () => {
+  const email = $('#siTo').textContent, name = $('#siName').value.trim(), code = $('#siCode').value.trim();
+  if (!/^\d{6}$/.test(code)) { toast('Enter the 6-digit code.'); return; }
+  if (!navigator.onLine) { toast('You are offline. Try again when you have signal.'); return; }
+  $('#siVerify').disabled = true;
+  try {
+    const d = await api({ action: 'verifyCode', email: email, name: name, code: code });
+    if (!d.ok) { toast(d.error); return; }
+    S.cred = { token: d.token, exp: d.exp };
+    S.profile = Object.assign({}, S.profile || {}, { email: d.user.email, name: d.user.name, isIT: d.user.isIT, verified: true });
+    $('#siCode').value = ''; $('#siStep2').hidden = true; $('#siStep1').hidden = false;
+    save(); prefill(); render(); sync();
+  } catch (e) { toast('Could not reach the server. Try again.'); }
+  finally { $('#siVerify').disabled = false; }
+});
+
+$('#signOut').addEventListener('click', e => {
+  e.preventDefault();
+  const n = S.queue.length;
+  if (n && !confirm(n + ' unsent item(s) are saved on this device and need this same account to send. Sign out anyway?')) return;
+  S.cred = null; S.tickets = [];
+  S.profile = Object.assign({}, S.profile, { verified: false, isIT: false });
+  save(); prefill(); render();
+});
+
+/* ---------- Sync ---------- */
+let syncing = false;
+async function sync(manual) {
+  if (syncing) return;
+  if (!navigator.onLine) { if (manual) toast('Still offline. Your tickets are safe on this device.'); return; }
+  if (!apiReady()) return;
+  if (!credValid()) { render(); if (manual) toast('Please sign in to sync.'); return; }
+  syncing = true; $('#syncBtn').disabled = true;
+  try {
+    const d = await api({ action: 'sync', token: S.cred.token, ops: S.queue.filter(o => !o.error) });
+    if (!d.ok) {
+      if (d.auth) { S.cred = null; }
+      toast(d.error); return;
+    }
+    const byId = {};
+    (d.results || []).forEach(x => { byId[x.id] = x; });
+    let failed = 0;
+    S.queue = S.queue.filter(o => {
+      const x = byId[o.id];
+      if (!x) return true;
+      if (x.ok) return false;
+      o.error = x.error; failed++; return true;
+    });
+    S.tickets = d.tickets; S.config = Object.assign({}, DEFAULT_CONFIG, d.config);
+    S.profile = Object.assign({}, S.profile, { email: d.user.email, name: (S.profile && S.profile.name) || d.user.name, isIT: d.user.isIT, verified: true });
+    prefill();
+    toast(failed ? failed + ' item(s) could not be sent. Open them to see why.' : 'Synced.');
+  } catch (e) {
+    toast('Could not reach the server. Will retry automatically.');
+  } finally {
+    syncing = false; $('#syncBtn').disabled = false; save(); render();
+  }
+}
+
+/* ---------- Tabs, events, start-up ---------- */
+function showTab(t) {
+  $('#viewNew').hidden = t !== 'new'; $('#viewList').hidden = t !== 'list';
+  $('#tabNew').classList.toggle('act', t === 'new'); $('#tabList').classList.toggle('act', t === 'list');
+}
+$('#tabNew').addEventListener('click', () => showTab('new'));
+$('#tabList').addEventListener('click', () => showTab('list'));
+$('#q').addEventListener('input', renderList);
+$('#fSt').addEventListener('change', renderList);
+$('#syncBtn').addEventListener('click', () => sync(true));
+window.addEventListener('online', () => { render(); sync(); });
+window.addEventListener('offline', render);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+setInterval(() => { if (!document.hidden) sync(); }, 5 * 60 * 1000);
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+prefill(); render(); sync();
+</script>
+</body>
+</html>
