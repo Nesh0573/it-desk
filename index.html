@@ -45,6 +45,18 @@ textarea{min-height:100px}
 .badge{font-size:12px;padding:2px 9px;border-radius:99px;background:#e0e0e0;color:#222;white-space:nowrap}
 .badge.open{background:#f4c7c3}.badge.in-progress{background:#fce8b2}.badge.waiting-on-camp{background:#d9eaf7}
 .badge.resolved{background:#b7e1cd}.badge.closed{background:#e0e0e0}.badge.pending-sync{background:#ffe0b2}.badge.sync-error{background:#ef9a9a}
+.steps{display:flex;gap:4px;margin:8px 0 4px}
+.steps i{flex:1;height:6px;border-radius:3px;background:var(--bd)}
+.steps i.on{background:var(--g2)}
+.steps.wait i.cur{background:#e0a800}
+.stcols{display:flex;gap:4px;margin-bottom:6px}
+.stcols div{flex:1;font-size:11px;color:var(--mut);min-width:0}
+.stcols b{display:block;font-weight:500}
+.stcols span{display:block}
+.stcols .cur{color:var(--tx)}
+.stcols .cur b{font-weight:700}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#d32f2f;margin-left:6px;vertical-align:middle}
+.newtag{font-size:11px;color:#d32f2f;margin-left:6px}
 #banner{background:#fff8e1;color:#4a3b00;border:1px solid #ffe082;border-radius:12px;padding:12px;margin-bottom:10px}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .25s;max-width:90%;z-index:20}
 #toast.show{opacity:1}
@@ -109,6 +121,7 @@ dialog::backdrop{background:#0008}
       <input id="q" placeholder="Search tickets">
       <select id="fSt"></select>
     </div>
+    <div id="lastSync" class="muted" style="text-align:center;margin:0 0 10px"></div>
     <div id="list"></div>
   </section>
 </main>
@@ -147,9 +160,11 @@ let S = {
   cred: ls.get('cred', null),
   config: Object.assign({}, DEFAULT_CONFIG, ls.get('config', {})),
   tickets: ls.get('tickets', []),
-  queue: ls.get('queue', [])
+  queue: ls.get('queue', []),
+  seen: ls.get('seen', {}),
+  lastSync: ls.get('lastSync', null)
 };
-const save = () => ['profile', 'cred', 'config', 'tickets', 'queue'].forEach(k => ls.set(k, S[k]));
+const save = () => ['profile', 'cred', 'config', 'tickets', 'queue', 'seen', 'lastSync'].forEach(k => ls.set(k, S[k]));
 
 let toastTimer;
 function toast(m) {
@@ -187,6 +202,7 @@ function render() {
     if (!$('#siEmail').value && p && p.email) $('#siEmail').value = p.email;
     if (!$('#siName').value && p && p.name) $('#siName').value = p.name;
   }
+  $('#lastSync').textContent = S.lastSync ? 'Last updated ' + ago(S.lastSync) + '. Tap Sync to refresh.' : 'Not synced yet. Tap Sync to load your tickets.';
   renderList();
 }
 
@@ -206,16 +222,68 @@ function allRows() {
   return pend.concat(S.tickets);
 }
 
+const STEPS = ['Open', 'In Progress', 'Resolved', 'Closed'];
+const fmtS = x => x ? new Date(x).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+function stepTimes(t) {
+  const m = {};
+  (t.history || []).forEach(x => { m[x.s] = x.t; });
+  if (!m['Open'] && t.created) m['Open'] = t.created;
+  if (!m['Resolved'] && t.resolvedAt) m['Resolved'] = t.resolvedAt;
+  return m;
+}
+function stepsHtml(t, labels) {
+  const st = t.status, waiting = st === 'Waiting on Camp';
+  const n = waiting ? 1 : STEPS.indexOf(st);
+  if (n < 0) return '';
+  const tm = stepTimes(t);
+  let h = '<div class="steps' + (waiting ? ' wait' : '') + '">' +
+    STEPS.map((x, i) => '<i class="' + (i < n ? 'on' : i === n ? 'on cur' : '') + '"></i>').join('') + '</div>';
+  if (labels) {
+    h += '<div class="stcols">' + STEPS.map((x, i) =>
+      '<div class="' + (i === n ? 'cur' : '') + '"><b>' + x + '</b><span>' + (i <= n && tm[x] ? fmtS(tm[x]) : '&mdash;') + '</span></div>').join('') + '</div>';
+    if (waiting) h += '<p class="muted">Waiting on the camp: IT needs a reply.</p>';
+  }
+  return h;
+}
+function historyHtml(t) {
+  const hs = t.history || [];
+  if (!hs.length) return '';
+  return '<h4>History</h4>' + hs.map(x => '<div class="cm">' + esc(x.s) + ' &middot; ' + fmt(x.t) +
+    (x.by ? ' &middot; ' + esc(String(x.by).split('@')[0]) : '') + '</div>').join('');
+}
+function ago(x) {
+  if (!x) return '';
+  const m = Math.round((Date.now() - new Date(x)) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + ' min ago';
+  const h = Math.round(m / 60);
+  if (h < 24) return h + ' h ago';
+  const d = Math.round(h / 24);
+  return d + ' day' + (d > 1 ? 's' : '') + ' ago';
+}
+function markSeen(t) {
+  if (t && t.no && t.no !== 'Pending') { S.seen[t.no] = { s: t.status }; ls.set('seen', S.seen); }
+}
+function hasNews(t) { const v = S.seen[t.no]; return !!(v && v.s !== t.status); }
+
 function renderList() {
   const q = $('#q').value.toLowerCase(), st = $('#fSt').value;
   const rows = allRows().filter(r => (!st || r.status === st) &&
     (!q || (r.no + ' ' + r.subject + ' ' + r.camp + ' ' + r.description + ' ' + (r.reporterEmail || '')).toLowerCase().includes(q)));
   rows.sort((a, b) => new Date(b.created) - new Date(a.created));
-  $('#list').innerHTML = rows.length ? rows.map(r =>
-    '<div class="card tk" data-k="' + esc(r.pending ? r.opId : r.no) + '"><div class="row"><b>' + esc(r.no) +
-    '</b><span class="badge ' + slug(r.status) + '">' + esc(r.status) + '</span></div><div>' + esc(r.subject) +
-    '</div><div class="muted">' + esc(r.camp) + ' · ' + esc(r.priority) + ' · ' + fmt(r.created) + '</div></div>'
-  ).join('') : '<p class="muted" style="text-align:center">No tickets to show.</p>';
+  $('#list').innerHTML = rows.length ? rows.map(r => {
+    const news = !r.pending && hasNews(r);
+    const tm = r.pending ? {} : stepTimes(r);
+    const more = (r.status === 'Resolved' || r.status === 'Closed' ? (tm['Resolved'] ? ' · Resolved ' + fmtS(tm['Resolved']) : '') : '') +
+      (r.status === 'Closed' && tm['Closed'] ? ' · Closed ' + fmtS(tm['Closed']) : '');
+    const who = r.assigned ? 'Assigned to ' + esc(String(r.assigned).split('@')[0]) + ' · ' : '';
+    return '<div class="card tk" data-k="' + esc(r.pending ? r.opId : r.no) + '"><div class="row"><span><b>' + esc(r.no) + '</b>' +
+      (news ? '<span class="dot"></span><span class="newtag">Status updated</span>' : '') + '</span>' +
+      '<span class="badge ' + slug(r.status) + '">' + esc(r.status) + '</span></div><div>' + esc(r.subject) +
+      '</div><div class="muted">' + esc(r.camp) + ' · ' + esc(r.priority) + ' · Reported ' + fmtS(r.created) + '</div>' +
+      stepsHtml(r) +
+      (r.pending ? '' : '<div class="muted">' + who + 'Updated ' + ago(r.updated) + more + '</div>') + '</div>';
+  }).join('') : '<p class="muted" style="text-align:center">No tickets to show.</p>';
 }
 
 /* ---------- Queue ---------- */
@@ -248,13 +316,15 @@ $('#frm').addEventListener('submit', ev => {
 function openTicket(key) {
   const t = allRows().find(r => (r.pending ? r.opId : r.no) === key);
   if (!t) return;
+  markSeen(t); renderList();
   const isIT = S.profile && S.profile.isIT;
   let h = '<h3 style="margin-top:0">' + esc(t.no) + ' · ' + esc(t.subject) + '</h3>' +
     '<p class="muted">' + esc(t.camp) + ' · ' + esc(t.category) + ' · ' + esc(t.priority) + ' · ' + fmt(t.created) +
     (t.reporterName ? '<br>Reported by ' + esc(t.reporterName) + ' (' + esc(t.reporterEmail) + ')' : '') + '</p>' +
     '<p>' + esc(t.description).replace(/\n/g, '<br>') + '</p>' +
     '<p><span class="badge ' + slug(t.status) + '">' + esc(t.status) + '</span>' +
-    (t.assigned ? ' <span class="muted">Assigned to ' + esc(t.assigned) + '</span>' : '') + '</p>';
+    (t.assigned ? ' <span class="muted">Assigned to ' + esc(t.assigned) + '</span>' : '') + '</p>' +
+    stepsHtml(t, true) + (t.updated ? '<p class="muted">Last updated ' + fmt(t.updated) + '</p>' : '') + historyHtml(t);
   if (t.pending) {
     if (t.error) h += '<p class="err">' + esc(t.error) + '</p><button id="dRetry" class="sec">Retry</button> ';
     h += '<button id="dDiscard" class="danger">Discard</button>';
@@ -285,9 +355,12 @@ function openTicket(key) {
   on('#dSave', () => {
     const tk = S.tickets.find(x => x.no === t.no);
     const status = $('#dSt').value, assigned = $('#dAs').value;
-    if (tk) { tk.status = status; tk.assigned = assigned; }
+    if (tk) {
+      if (tk.status !== status) tk.history = (tk.history || []).concat([{ t: new Date().toISOString(), s: status, by: 'pending sync' }]);
+      tk.status = status; tk.assigned = assigned; markSeen(tk);
+    }
     queueOp('update', { ticketNo: t.no, status: status, assigned: assigned });
-    $('#dlg').close(); toast('Update saved.');
+    $('#dlg').close(); toast('Status set to ' + status + '. Syncing...');
   });
   $('#dlg').showModal();
 }
@@ -345,7 +418,7 @@ $('#signOut').addEventListener('click', e => {
   e.preventDefault();
   const n = S.queue.length;
   if (n && !confirm(n + ' unsent item(s) are saved on this device and need this same account to send. Sign out anyway?')) return;
-  S.cred = null; S.tickets = [];
+  S.cred = null; S.tickets = []; S.seen = {}; S.lastSync = null;
   S.profile = Object.assign({}, S.profile, { verified: false, isIT: false });
   save(); prefill(); render();
 });
@@ -374,6 +447,8 @@ async function sync(manual) {
       o.error = x.error; failed++; return true;
     });
     S.tickets = d.tickets; S.config = Object.assign({}, DEFAULT_CONFIG, d.config);
+    S.tickets.forEach(t => { if (!S.seen[t.no]) S.seen[t.no] = { s: t.status }; });
+    S.lastSync = new Date().toISOString();
     S.profile = Object.assign({}, S.profile, { email: d.user.email, name: (S.profile && S.profile.name) || d.user.name, isIT: d.user.isIT, verified: true });
     prefill();
     toast(failed ? failed + ' item(s) could not be sent. Open them to see why.' : 'Synced.');
@@ -390,7 +465,7 @@ function showTab(t) {
   $('#tabNew').classList.toggle('act', t === 'new'); $('#tabList').classList.toggle('act', t === 'list');
 }
 $('#tabNew').addEventListener('click', () => showTab('new'));
-$('#tabList').addEventListener('click', () => showTab('list'));
+$('#tabList').addEventListener('click', () => { showTab('list'); sync(); });
 $('#q').addEventListener('input', renderList);
 $('#fSt').addEventListener('change', renderList);
 $('#syncBtn').addEventListener('click', () => sync(true));
@@ -398,6 +473,7 @@ window.addEventListener('online', () => { render(); sync(); });
 window.addEventListener('offline', render);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
 setInterval(() => { if (!document.hidden) sync(); }, 5 * 60 * 1000);
+setInterval(() => { if (!document.hidden) render(); }, 60000);
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
